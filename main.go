@@ -1,11 +1,15 @@
 package main
 
 import (
-	"github.com/gorilla/mux"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/gorilla/mux"
 )
 
 const ExtensionsPath = "/liman/extensions/"
@@ -13,28 +17,45 @@ const LimanUser = "liman"
 const DefaultShell = "/bin/bash"
 const ResolvPath = "/etc/resolv.conf"
 const DnsOptions = "options rotate timeout:1 retries:1"
+const AuthKeyPath = "/liman/keys/service.key"
+const ExtensionKeysPath = "/liman/keys/"
 
 func main() {
 	r := mux.NewRouter()
-	r.HandleFunc("/dns",dnsHandler)
-	r.HandleFunc("/userAdd",userAddHandler)
-	r.HandleFunc("/userRemove",userRemoveHandler)
-	r.HandleFunc("/fixPermissions",permissionFixHandler)
-	r.HandleFunc("/certificateAdd",certificateAddHandler)
-	r.HandleFunc("/certificateRemove",certificateRemoveHandler)
+	storeRandomKey()
+	r.HandleFunc("/dns", dnsHandler)
+	r.HandleFunc("/userAdd", userAddHandler)
+	r.HandleFunc("/userRemove", userRemoveHandler)
+	r.HandleFunc("/fixPermissions", permissionFixHandler)
+	r.HandleFunc("/certificateAdd", certificateAddHandler)
+	r.HandleFunc("/certificateRemove", certificateRemoveHandler)
+	r.HandleFunc("/fixExtensionKeysPermission", fixExtensionKeyHandler)
+	r.HandleFunc("/extensionRun", runExtensionHandler)
 	_ = http.ListenAndServe("127.0.0.1:1803", r)
 }
 
 func dnsHandler(w http.ResponseWriter, r *http.Request) {
-	server1 , _ := r.URL.Query()["server1"]
-	server2 , _ := r.URL.Query()["server2"]
-	server3 , _ := r.URL.Query()["server3"]
-	result := setDnsServers(server1[0],server2[0],server3[0])
+	server1, _ := r.URL.Query()["server1"]
+	server2, _ := r.URL.Query()["server2"]
+	server3, _ := r.URL.Query()["server3"]
+	result := setDnsServers(server1[0], server2[0], server3[0])
 	if result == true {
 		_, _ = w.Write([]byte("DNS updated!\n"))
 		w.WriteHeader(http.StatusOK)
 	} else {
 		_, _ = w.Write([]byte("DNS update failed!\n"))
+		w.WriteHeader(http.StatusNotAcceptable)
+	}
+}
+
+func fixExtensionKeyHandler(w http.ResponseWriter, r *http.Request) {
+	extension_id, _ := r.URL.Query()["extension_id"]
+	result := fixExtensionKeys(extension_id[0])
+	if result == true {
+		_, _ = w.Write([]byte("Key permissions updated!\n"))
+		w.WriteHeader(http.StatusOK)
+	} else {
+		_, _ = w.Write([]byte("Key permission update failed!\n"))
 		w.WriteHeader(http.StatusNotAcceptable)
 	}
 }
@@ -101,6 +122,55 @@ func certificateRemoveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func runExtensionHandler(w http.ResponseWriter, r *http.Request) {
+	command, _ := r.URL.Query()["command"]
+	output := runExtensionCommand(command[0])
+	_, _ = w.Write([]byte(output))
+	w.WriteHeader(http.StatusOK)
+}
+
+func runExtensionCommand(command string) string {
+	out, err := executeCommand(command)
+	if err == nil {
+		return out
+	} else {
+		return err.Error()
+	}
+}
+
+func fixExtensionKeys(extensionId string) bool {
+	_, err := executeCommand("chmod -R 700 " + ExtensionKeysPath + extensionId)
+	if err != nil {
+		return false
+	}
+
+	_, err = executeCommand("chown -R " + extensionId + ":" + LimanUser + " " + ExtensionKeysPath + extensionId)
+	if err == nil {
+		return true
+	} else {
+		return false
+	}
+}
+
+func storeRandomKey() {
+	rand.Seed(time.Now().UnixNano())
+	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ" +
+		"abcdefghijklmnopqrstuvwxyzåäö" +
+		"0123456789")
+	length := 32
+	var b strings.Builder
+	for i := 0; i < length; i++ {
+		b.WriteRune(chars[rand.Intn(len(chars))])
+	}
+	key := b.String()
+	d1 := []byte(key)
+	err := ioutil.WriteFile(AuthKeyPath, d1, 0700)
+	_, err2 := executeCommand("chown liman:liman " + AuthKeyPath)
+	if err != nil || err2 != nil {
+		panic("Key can't be stored")
+	}
+}
+
 func addUser(extensionId string) bool {
 	_, err := executeCommand("useradd -r -s " + DefaultShell + " " + extensionId)
 	if err == nil {
@@ -134,7 +204,7 @@ func fixExtensionPermissions(extensionId string, extensionName string) bool {
 }
 
 func addSystemCertificate(tmpPath string, targetName string) bool {
-	certPath , certUpdateCommand := getCertificateStrings()
+	certPath, certUpdateCommand := getCertificateStrings()
 
 	_, err := executeCommand("mv " + tmpPath + " " + certPath + "/" + targetName + ".crt")
 	if err != nil {
@@ -150,7 +220,7 @@ func addSystemCertificate(tmpPath string, targetName string) bool {
 }
 
 func removeSystemCertificate(targetName string) bool {
-	certPath , certUpdateCommand := getCertificateStrings()
+	certPath, certUpdateCommand := getCertificateStrings()
 	_, err := executeCommand("rm " + certPath + "/" + targetName + ".crt")
 	if err != nil {
 		return false
@@ -164,7 +234,7 @@ func removeSystemCertificate(targetName string) bool {
 	}
 }
 
-func getCertificateStrings () (string,string) {
+func getCertificateStrings() (string, string) {
 	certPath := "/usr/local/share/ca-certificates/"
 	certUpdateCommand := "update-ca-certificates"
 	if isCentOs() == true {
@@ -177,12 +247,11 @@ func getCertificateStrings () (string,string) {
 func setDnsServers(server1 string, server2 string, server3 string) bool {
 	_, err := executeCommand("chattr -i " + ResolvPath)
 	if err != nil {
-		println(err.Error())
 		return false
 	}
 	newData := []byte(DnsOptions + "\n" + server1 + "\n" + server2 + "\n" + server3 + "\n")
 
-	err = ioutil.WriteFile(ResolvPath,newData, 0644)
+	err = ioutil.WriteFile(ResolvPath, newData, 0644)
 
 	if err != nil {
 		return false
