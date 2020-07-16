@@ -2,6 +2,7 @@ package main
 
 import (
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -12,13 +13,28 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// ExtensionsPath : Liman's Extension Folder
 const ExtensionsPath = "/liman/extensions/"
+
+// LimanUser : Just in case if liman user changed to something else.
 const LimanUser = "liman"
+
+// DefaultShell : Default sh shell
 const DefaultShell = "/bin/bash"
+
+// ResolvPath : Dns server' configuration path.
 const ResolvPath = "/etc/resolv.conf"
-const DnsOptions = "options rotate timeout:1 retries:1"
+
+// DNSOptions : Options to have multiple dns servers
+const DNSOptions = "options rotate timeout:1 retries:1"
+
+// AuthKeyPath : Key Path for liman to auth with this system
 const AuthKeyPath = "/liman/keys/service.key"
+
+// ExtensionKeysPath : Extension Key' Path to fix permissions
 const ExtensionKeysPath = "/liman/keys/"
+
+var currentToken = ""
 
 func main() {
 	r := mux.NewRouter()
@@ -31,14 +47,40 @@ func main() {
 	r.HandleFunc("/certificateRemove", certificateRemoveHandler)
 	r.HandleFunc("/fixExtensionKeysPermission", fixExtensionKeyHandler)
 	r.HandleFunc("/extensionRun", runExtensionHandler)
-	_ = http.ListenAndServe("127.0.0.1:1803", r)
+	r.HandleFunc("/test", testHandler)
+	r.Use(loggingMiddleware)
+	r.Use(verifyTokenMiddleware)
+	_ = http.ListenAndServe("127.0.0.1:3008", r)
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.RequestURI)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func verifyTokenMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limanToken, _ := r.URL.Query()["liman_token"]
+		if len(limanToken) == 0 || limanToken[0] != currentToken {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func testHandler(w http.ResponseWriter, r *http.Request) {
+	_, _ = w.Write([]byte("It works!\n"))
+	w.WriteHeader(http.StatusOK)
 }
 
 func dnsHandler(w http.ResponseWriter, r *http.Request) {
 	server1, _ := r.URL.Query()["server1"]
 	server2, _ := r.URL.Query()["server2"]
 	server3, _ := r.URL.Query()["server3"]
-	result := setDnsServers(server1[0], server2[0], server3[0])
+	result := setDNSServers(server1[0], server2[0], server3[0])
 	if result == true {
 		_, _ = w.Write([]byte("DNS updated!\n"))
 		w.WriteHeader(http.StatusOK)
@@ -49,8 +91,8 @@ func dnsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func fixExtensionKeyHandler(w http.ResponseWriter, r *http.Request) {
-	extension_id, _ := r.URL.Query()["extension_id"]
-	result := fixExtensionKeys(extension_id[0])
+	extensionID, _ := r.URL.Query()["extension_id"]
+	result := fixExtensionKeys(extensionID[0])
 	if result == true {
 		_, _ = w.Write([]byte("Key permissions updated!\n"))
 		w.WriteHeader(http.StatusOK)
@@ -61,8 +103,8 @@ func fixExtensionKeyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func userAddHandler(w http.ResponseWriter, r *http.Request) {
-	extensionId, _ := r.URL.Query()["extensionId"]
-	result := addUser(extensionId[0])
+	extensionID, _ := r.URL.Query()["extension_id"]
+	result := addUser(extensionID[0])
 	if result == true {
 		_, _ = w.Write([]byte("New User Added!\n"))
 		w.WriteHeader(http.StatusOK)
@@ -73,8 +115,8 @@ func userAddHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func userRemoveHandler(w http.ResponseWriter, r *http.Request) {
-	extensionId, _ := r.URL.Query()["extensionId"]
-	result := removeUser(extensionId[0])
+	extensionID, _ := r.URL.Query()["extension_id"]
+	result := removeUser(extensionID[0])
 	if result == true {
 		_, _ = w.Write([]byte("User Removed!\n"))
 		w.WriteHeader(http.StatusOK)
@@ -85,9 +127,9 @@ func userRemoveHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func permissionFixHandler(w http.ResponseWriter, r *http.Request) {
-	extensionId, _ := r.URL.Query()["extensionId"]
+	extensionID, _ := r.URL.Query()["extension_id"]
 	extensionName, _ := r.URL.Query()["extensionName"]
-	result := fixExtensionPermissions(extensionId[0], extensionName[0])
+	result := fixExtensionPermissions(extensionID[0], extensionName[0])
 	if result == true {
 		_, _ = w.Write([]byte("Permissions fixed!\n"))
 		w.WriteHeader(http.StatusOK)
@@ -133,23 +175,21 @@ func runExtensionCommand(command string) string {
 	out, err := executeCommand(command)
 	if err == nil {
 		return out
-	} else {
-		return err.Error()
 	}
+	return err.Error()
 }
 
-func fixExtensionKeys(extensionId string) bool {
-	_, err := executeCommand("chmod -R 700 " + ExtensionKeysPath + extensionId)
+func fixExtensionKeys(extensionID string) bool {
+	_, err := executeCommand("chmod -R 700 " + ExtensionKeysPath + extensionID)
 	if err != nil {
 		return false
 	}
 
-	_, err = executeCommand("chown -R " + extensionId + ":" + LimanUser + " " + ExtensionKeysPath + extensionId)
+	_, err = executeCommand("chown -R " + extensionID + ":" + LimanUser + " " + ExtensionKeysPath + extensionID)
 	if err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func storeRandomKey() {
@@ -164,6 +204,7 @@ func storeRandomKey() {
 	}
 	key := b.String()
 	d1 := []byte(key)
+	currentToken = string(d1)
 	err := ioutil.WriteFile(AuthKeyPath, d1, 0700)
 	_, err2 := executeCommand("chown liman:liman " + AuthKeyPath)
 	if err != nil || err2 != nil {
@@ -171,36 +212,33 @@ func storeRandomKey() {
 	}
 }
 
-func addUser(extensionId string) bool {
-	_, err := executeCommand("useradd -r -s " + DefaultShell + " " + extensionId)
+func addUser(extensionID string) bool {
+	_, err := executeCommand("useradd -r -s " + DefaultShell + " " + extensionID)
 	if err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
-func removeUser(extensionId string) bool {
-	_, err := executeCommand("userdel " + extensionId)
+func removeUser(extensionID string) bool {
+	_, err := executeCommand("userdel " + extensionID)
 	if err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
-func fixExtensionPermissions(extensionId string, extensionName string) bool {
+func fixExtensionPermissions(extensionID string, extensionName string) bool {
 	_, err := executeCommand("chmod -R 770 " + ExtensionsPath + extensionName)
 	if err != nil {
 		return false
 	}
 
-	_, err = executeCommand("chown -R " + extensionId + ":" + LimanUser + " " + ExtensionsPath + extensionId)
+	_, err = executeCommand("chown -R " + extensionID + ":" + LimanUser + " " + ExtensionsPath + extensionID)
 	if err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func addSystemCertificate(tmpPath string, targetName string) bool {
@@ -214,9 +252,8 @@ func addSystemCertificate(tmpPath string, targetName string) bool {
 	_, err = executeCommand(certUpdateCommand)
 	if err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func removeSystemCertificate(targetName string) bool {
@@ -229,9 +266,8 @@ func removeSystemCertificate(targetName string) bool {
 	_, err = executeCommand(certUpdateCommand)
 	if err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func getCertificateStrings() (string, string) {
@@ -244,12 +280,12 @@ func getCertificateStrings() (string, string) {
 	return certPath, certUpdateCommand
 }
 
-func setDnsServers(server1 string, server2 string, server3 string) bool {
+func setDNSServers(server1 string, server2 string, server3 string) bool {
 	_, err := executeCommand("chattr -i " + ResolvPath)
 	if err != nil {
 		return false
 	}
-	newData := []byte(DnsOptions + "\n" + server1 + "\n" + server2 + "\n" + server3 + "\n")
+	newData := []byte(DNSOptions + "\n" + server1 + "\n" + server2 + "\n" + server3 + "\n")
 
 	err = ioutil.WriteFile(ResolvPath, newData, 0644)
 
