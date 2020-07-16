@@ -1,14 +1,11 @@
-# Çalıştırma
-
-Herhangi bir bağımlığa gerek olmadan direkt çalıştırabilirsiniz. Servisi çalıştırmak için : 
-
-`sudo build/liman_system`
-
 #### Test Edilen İşletim Sistemleri : 
 
 Debian 10
+
 Pardus 19
+
 CentOS 8 Minimal Server
+
 Fedora Workstation 32
 
 #### Sorgu Örnekleri : 
