@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"crypto/tls"
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -14,7 +17,7 @@ import (
 )
 
 // System Version
-const Version = "1.0"
+const Version = "1.1"
 
 // ExtensionsPath : Liman's Extension Folder
 const ExtensionsPath = "/liman/extensions/"
@@ -174,7 +177,16 @@ func certificateRemoveHandler(w http.ResponseWriter, r *http.Request) {
 
 func runExtensionHandler(w http.ResponseWriter, r *http.Request) {
 	command, _ := r.URL.Query()["command"]
-	output := runExtensionCommand(command[0])
+	background, _ := r.URL.Query()["background"]
+	userID, _ := r.URL.Query()["user_id"]
+	handler, _ := r.URL.Query()["handler"]
+	output := ""
+	if len(background) > 0 && background[0] == "true" {
+		go runExtensionBackgroundCommand(command[0], userID[0], handler[0])
+		output = "Render Requested"
+	} else {
+		output = runExtensionCommand(command[0])
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(output))
 }
@@ -185,6 +197,20 @@ func runExtensionCommand(command string) string {
 		return out
 	}
 	return err.Error()
+}
+
+func runExtensionBackgroundCommand(command string, userID string, handler string) {
+	output := runExtensionCommand(command)
+	requestBody, _ := json.Marshal(map[string]string{
+		"output":       output,
+		"user_id":      userID,
+		"system_token": currentToken,
+		"handler":      handler,
+	})
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	time.Sleep(1 * time.Second)
+	http.Post("https://127.0.0.1/lmn/private/extensionRenderedHandler", "application/json", bytes.NewBuffer(requestBody))
+	log.Println("Background Render result sent to Liman 🤓")
 }
 
 func fixExtensionKeys(extensionID string) bool {
