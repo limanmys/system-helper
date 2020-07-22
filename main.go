@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// System Version
+// Version 1.1
 const Version = "1.1"
 
 // ExtensionsPath : Liman's Extension Folder
@@ -192,11 +192,8 @@ func runExtensionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runExtensionCommand(command string) string {
-	out, err := executeCommand(command)
-	if err == nil {
-		return out
-	}
-	return err.Error()
+	out, _ := executeCommand(command)
+	return out
 }
 
 func runExtensionBackgroundCommand(command string, userID string, handler string) {
