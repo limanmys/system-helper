@@ -16,8 +16,8 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Version 1.1
-const Version = "1.1"
+// Version 1.2
+const Version = "1.2"
 
 // ExtensionsPath : Liman's Extension Folder
 const ExtensionsPath = "/liman/extensions/"
@@ -335,9 +335,20 @@ func setDNSServers(server1 string, server2 string, server3 string) bool {
 		log.Println(err)
 		return false
 	}
-	newData := []byte(DNSOptions + "\nnameserver " + server1 + "\nnameserver " + server2 + "\nnameserver " + server3 + "\n")
+	newData := DNSOptions + "\n"
+	if server1 != "" {
+		newData += "nameserver " + server1 + "\n"
+	}
 
-	err = ioutil.WriteFile(ResolvPath, newData, 0644)
+	if server2 != "" {
+		newData += "nameserver " + server2 + "\n"
+	}
+
+	if server3 != "" {
+		newData += "nameserver " + server3 + "\n"
+	}
+
+	err = ioutil.WriteFile(ResolvPath, []byte(newData), 0644)
 
 	if err != nil {
 		log.Println(err)
