@@ -177,16 +177,7 @@ func certificateRemoveHandler(w http.ResponseWriter, r *http.Request) {
 
 func runExtensionHandler(w http.ResponseWriter, r *http.Request) {
 	command, _ := r.URL.Query()["command"]
-	background, _ := r.URL.Query()["background"]
-	userID, _ := r.URL.Query()["user_id"]
-	handler, _ := r.URL.Query()["handler"]
-	output := ""
-	if len(background) > 0 && background[0] == "true" {
-		go runExtensionBackgroundCommand(command[0], userID[0], handler[0])
-		output = "Render Requested"
-	} else {
-		output = runExtensionCommand(command[0])
-	}
+	output := runExtensionCommand(command[0])
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(output))
 }
