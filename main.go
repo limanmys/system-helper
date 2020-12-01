@@ -52,6 +52,7 @@ func main() {
 	r.HandleFunc("/userRemove", userRemoveHandler)
 	r.HandleFunc("/fixPermissions", permissionFixHandler)
 	r.HandleFunc("/certificateAdd", certificateAddHandler)
+	r.HandleFunc("/installPackages", packageInstallHandler)
 	r.HandleFunc("/certificateRemove", certificateRemoveHandler)
 	r.HandleFunc("/fixExtensionKeysPermission", fixExtensionKeyHandler)
 	r.HandleFunc("/extensionRun", runExtensionHandler)
@@ -98,6 +99,14 @@ func dnsHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotAcceptable)
 		_, _ = w.Write([]byte("DNS update failed!\n"))
 	}
+}
+
+func packageInstallHandler(w http.ResponseWriter, r *http.Request) {
+	packages, _ := r.URL.Query()["packages"]
+	command := "if [ -z '$(find /var/cache/apt/pkgcache.bin -mmin -60)' ]; then sudo apt-get update; fi;DEBIAN_FRONTEND=noninteractive sudo apt-get install -o Dpkg::Use-Pty=0 -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' " + packages[0] + " -qqy --force-yes 2>&1"
+	go executeCommand(command)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Installation requested!\n"))
 }
 
 func fixExtensionKeyHandler(w http.ResponseWriter, r *http.Request) {
