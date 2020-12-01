@@ -215,6 +215,13 @@ func fixExtensionKeys(extensionID string) bool {
 }
 
 func storeRandomKey() {
+	if _, err := os.Stat(AuthKeyPath); err == nil {
+		log.Println("Reading existing key.")
+		dat, _ := ioutil.ReadFile(AuthKeyPath)
+		currentToken = string(dat)
+		return
+	}
+
 	rand.Seed(time.Now().UnixNano())
 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ" +
 		"abcdefghijklmnopqrstuvwxyzåäö" +
@@ -282,7 +289,7 @@ func addSystemCertificate(tmpPath string, targetName string) bool {
 		return false
 	}
 
-	_, err = executeCommand(certUpdateCommand)
+	_, err = executeCommand(certUpdateCommand + " 2>&1")
 	if err == nil {
 		log.Println("System Certificate Added")
 		return true
