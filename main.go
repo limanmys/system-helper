@@ -17,7 +17,7 @@ import (
 )
 
 // Version 1.2
-const Version = "1.2"
+const Version = "1.3"
 
 // ExtensionsPath : Liman's Extension Folder
 const ExtensionsPath = "/liman/extensions/"
@@ -102,9 +102,17 @@ func dnsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func packageInstallHandler(w http.ResponseWriter, r *http.Request) {
-	packages, _ := r.URL.Query()["packages"]
-	command := "if [ -z '$(find /var/cache/apt/pkgcache.bin -mmin -60)' ]; then sudo apt-get update; fi;DEBIAN_FRONTEND=noninteractive sudo apt-get install -o Dpkg::Use-Pty=0 -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' " + packages[0] + " -qqy --force-yes 2>&1"
-	go executeCommand(command)
+	packages := r.URL.Query()["packages"][0]
+
+	command := "if [ -z '$(find /var/cache/apt/pkgcache.bin -mmin -60)' ]; then sudo apt-get update; fi;"
+	go func() {
+		executeCommand(command)
+		cmd := exec.Command("sudo", "apt-get", "install", "-o", "Dpkg::Use-Pty=0", "-o", "Dpkg::Options::='--force-confdef'", "-o", "Dpkg::Options::='--force-confold'", packages, "-qqy", "--force-yes")
+		cmd.Env = os.Environ()
+		cmd.Env = append(cmd.Env, "DEBIAN_FRONTEND=noninteractive")
+		cmd.Run()
+	}()
+
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Installation requested!\n"))
 }
@@ -192,8 +200,8 @@ func runExtensionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runExtensionCommand(command string) string {
-	out, _ := executeCommand(command)
-	return out
+	out, _ := exec.Command(DefaultShell, "-c", command).Output()
+	return string(out)
 }
 
 func runExtensionBackgroundCommand(command string, userID string, handler string) {
@@ -211,12 +219,12 @@ func runExtensionBackgroundCommand(command string, userID string, handler string
 }
 
 func fixExtensionKeys(extensionID string) bool {
-	_, err := executeCommand("chmod -R 700 " + ExtensionKeysPath + extensionID)
+	_, err := exec.Command("chmod", "-R", "700", ExtensionKeysPath, extensionID).Output()
 	if err != nil {
 		return false
 	}
 
-	_, err = executeCommand("chown -R " + extensionID + ":" + LimanUser + " " + ExtensionKeysPath + extensionID)
+	_, err = exec.Command("chown", "-R", extensionID+":"+LimanUser, ExtensionKeysPath, extensionID).Output()
 	if err == nil {
 		return true
 	}
@@ -244,7 +252,7 @@ func storeRandomKey() {
 	d1 := []byte(key)
 	currentToken = string(d1)
 	err := ioutil.WriteFile(AuthKeyPath, d1, 0700)
-	_, err2 := executeCommand("chown liman:liman " + AuthKeyPath)
+	_, err2 := exec.Command("chown", "liman:liman", AuthKeyPath).Output()
 	if err != nil || err2 != nil {
 		panic("Key can't be stored")
 	}
@@ -252,7 +260,7 @@ func storeRandomKey() {
 
 func addUser(extensionID string) bool {
 	log.Println("Adding System User : " + extensionID)
-	_, err := executeCommand("useradd -r -s " + DefaultShell + " " + extensionID)
+	_, err := exec.Command("useradd", "-r", "-s", DefaultShell, extensionID).Output()
 	if err == nil {
 		log.Println("System User Added : " + extensionID)
 		return true
@@ -263,7 +271,7 @@ func addUser(extensionID string) bool {
 
 func removeUser(extensionID string) bool {
 	log.Println("Removing System User : " + extensionID)
-	_, err := executeCommand("userdel " + extensionID)
+	_, err := exec.Command("userdel", extensionID).Output()
 	if err == nil {
 		log.Println("System User Removed : " + extensionID)
 		return true
@@ -273,14 +281,14 @@ func removeUser(extensionID string) bool {
 }
 
 func fixExtensionPermissions(extensionID string, extensionName string) bool {
-	_, err := executeCommand("chmod -R 770 " + ExtensionsPath + extensionName + " 2>&1")
+	_, err := exec.Command("chmod", "-R", "770", ExtensionsPath+extensionName).Output()
 	log.Println("Fixing Extension Permissions")
 	if err != nil {
 		log.Println(err)
 		return false
 	}
 
-	_, err = executeCommand("chown -R " + extensionID + ":" + LimanUser + " " + ExtensionsPath + extensionName + " 2>&1")
+	_, err = exec.Command("chown", "-R", extensionID+":"+LimanUser, ExtensionsPath+extensionName).Output()
 	if err == nil {
 		log.Println("Extension Permissions Fixed")
 		return true
@@ -292,7 +300,7 @@ func fixExtensionPermissions(extensionID string, extensionName string) bool {
 func addSystemCertificate(tmpPath string, targetName string) bool {
 	certPath, certUpdateCommand := getCertificateStrings()
 	log.Println("Adding System Certificate")
-	_, err := executeCommand("mv " + tmpPath + " " + certPath + "/" + targetName + ".crt")
+	_, err := exec.Command("mv", tmpPath, certPath+"/"+targetName+".crt").Output()
 	if err != nil {
 		log.Println(err)
 		return false
@@ -310,7 +318,7 @@ func addSystemCertificate(tmpPath string, targetName string) bool {
 func removeSystemCertificate(targetName string) bool {
 	log.Println("Removing System Certificate")
 	certPath, certUpdateCommand := getCertificateStrings()
-	_, err := executeCommand("rm " + certPath + "/" + targetName + ".crt")
+	_, err := exec.Command("rm ", certPath+"/"+targetName+".crt").Output()
 	if err != nil {
 		log.Println(err)
 		return false
@@ -336,7 +344,7 @@ func getCertificateStrings() (string, string) {
 }
 
 func setDNSServers(server1 string, server2 string, server3 string) bool {
-	_, err := executeCommand("chattr -i " + ResolvPath)
+	_, err := exec.Command("chattr", "-i", ResolvPath).Output()
 	log.Println("Updating DNS Servers")
 	if err != nil {
 		log.Println(err)
@@ -362,7 +370,7 @@ func setDNSServers(server1 string, server2 string, server3 string) bool {
 		return false
 	}
 
-	_, err = executeCommand("chattr +i " + ResolvPath)
+	_, err = exec.Command("chattr", "+i", ResolvPath).Output()
 	if err != nil {
 		log.Println(err)
 		return false
