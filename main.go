@@ -219,12 +219,12 @@ func runExtensionBackgroundCommand(command string, userID string, handler string
 }
 
 func fixExtensionKeys(extensionID string) bool {
-	_, err := exec.Command("chmod", "-R", "700", ExtensionKeysPath, extensionID).Output()
+	_, err := exec.Command("chmod", "-R", "700", ExtensionKeysPath+extensionID).Output()
 	if err != nil {
 		return false
 	}
 
-	_, err = exec.Command("chown", "-R", extensionID+":"+LimanUser, ExtensionKeysPath, extensionID).Output()
+	_, err = exec.Command("chown", "-R", extensionID+":"+LimanUser, ExtensionKeysPath+extensionID).Output()
 	if err == nil {
 		return true
 	}
