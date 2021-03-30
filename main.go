@@ -153,9 +153,14 @@ func userRemoveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func cleanDash(text string) (string){
+	return strings.ReplaceAll(text, "-", "")
+}
+
 func permissionFixHandler(w http.ResponseWriter, r *http.Request) {
 	extensionID, _ := r.URL.Query()["extension_id"]
 	extensionName, _ := r.URL.Query()["extension_name"]
+
 	result := fixExtensionPermissions(extensionID[0], extensionName[0])
 	result = fixExtensionKeys(extensionID[0])
 	if result == true {
@@ -224,7 +229,7 @@ func fixExtensionKeys(extensionID string) bool {
 		return false
 	}
 
-	_, err = exec.Command("chown", "-R", extensionID+":"+LimanUser, ExtensionKeysPath+extensionID).Output()
+	_, err = exec.Command("chown", "-R", cleanDash(extensionID)+":"+LimanUser, ExtensionKeysPath+extensionID).Output()
 	if err == nil {
 		return true
 	}
@@ -288,7 +293,7 @@ func fixExtensionPermissions(extensionID string, extensionName string) bool {
 		return false
 	}
 
-	_, err = exec.Command("chown", "-R", extensionID+":"+LimanUser, ExtensionsPath+extensionName).Output()
+	_, err = exec.Command("chown", "-R", cleanDash(extensionID)+":"+LimanUser, ExtensionsPath+extensionName).Output()
 	if err == nil {
 		log.Println("Extension Permissions Fixed")
 		return true
