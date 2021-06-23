@@ -153,7 +153,7 @@ func userRemoveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func cleanDash(text string) (string){
+func cleanDash(text string) string {
 	return strings.ReplaceAll(text, "-", "")
 }
 
@@ -323,7 +323,7 @@ func addSystemCertificate(tmpPath string, targetName string) bool {
 func removeSystemCertificate(targetName string) bool {
 	log.Println("Removing System Certificate")
 	certPath, certUpdateCommand := getCertificateStrings()
-	_, err := exec.Command("rm ", certPath+"/"+targetName+".crt").Output()
+	_, err := exec.Command("rm", certPath+"/"+targetName+".crt").Output()
 	if err != nil {
 		log.Println(err)
 		return false
