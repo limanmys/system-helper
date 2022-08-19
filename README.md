@@ -14,13 +14,13 @@ Fedora Workstation 32
 
 extensionId verisini düzenleyerek : 
 
-`curl '127.0.0.1:1803/userAdd?extensionId=mert'`
+`curl '127.0.0.1:1803/userAdd?extensionId=dogukan'`
 
 ##### Kullanıcı Silme
 
 extensionId verisini düzenleyerek : 
 
-`curl '127.0.0.1:1803/userRemove?extensionId=mert'`
+`curl '127.0.0.1:1803/userRemove?extensionId=dogukan'`
 
 ##### DNS Düzenleme
 server1,server2 ve server3 verilerini düzenleyerek : 
@@ -41,4 +41,4 @@ targetName verisini düzenleyerek :
 
 extensionId ve extensionName verilerini düzenleyerek : 
 
-`curl '127.0.0.1:1803/fixPermissions?extensionId=c9329ce0-c23c-11ea-b3de-0242ac130004&extensionName=mert'`
+`curl '127.0.0.1:1803/fixPermissions?extensionId=c9329ce0-c23c-11ea-b3de-0242ac130004&extensionName=dogukan'`
