@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 // Version 1.2
@@ -40,9 +41,16 @@ const AuthKeyPath = "/liman/keys/service.key"
 // ExtensionKeysPath : Extension Key' Path to fix permissions
 const ExtensionKeysPath = "/liman/keys/"
 
+const CorePath = "/liman/server"
+
 var currentToken = ""
 
 func main() {
+	err := godotenv.Load(CorePath + "/.env")
+	if err != nil {
+		log.Fatalln("Cannot read Liman environment file")
+	}
+
 	r := mux.NewRouter()
 	log.Println("Starting Liman System Helper & Extension Renderer")
 	log.Println("Version : " + Version)
@@ -56,7 +64,6 @@ func main() {
 	r.HandleFunc("/certificateRemove", certificateRemoveHandler)
 	r.HandleFunc("/fixExtensionKeysPermission", fixExtensionKeyHandler)
 	r.HandleFunc("/extensionRun", runExtensionHandler)
-	r.HandleFunc("/test", testHandler)
 	r.Use(loggingMiddleware)
 	r.Use(verifyTokenMiddleware)
 	log.Println("Service started at 127.0.0.1:3008")
@@ -229,7 +236,12 @@ func fixExtensionKeys(extensionID string) bool {
 		return false
 	}
 
-	_, err = exec.Command("chown", "-R", cleanDash(extensionID)+":"+LimanUser, ExtensionKeysPath+extensionID).Output()
+	if os.Getenv("CONTAINER_MODE") != "true" {
+		_, err = exec.Command("chown", "-R", cleanDash(extensionID)+":"+LimanUser, ExtensionKeysPath+extensionID).Output()
+	} else {
+		_, err = exec.Command("chown", "-R", "extuser:"+LimanUser, ExtensionKeysPath+extensionID).Output()
+	}
+
 	if err == nil {
 		return true
 	}
@@ -293,7 +305,11 @@ func fixExtensionPermissions(extensionID string, extensionName string) bool {
 		return false
 	}
 
-	_, err = exec.Command("chown", "-R", cleanDash(extensionID)+":"+LimanUser, ExtensionsPath+extensionName).Output()
+	if os.Getenv("CONTAINER_MODE") != "true" {
+		_, err = exec.Command("chown", "-R", cleanDash(extensionID)+":"+LimanUser, ExtensionsPath+extensionName).Output()
+	} else {
+		_, err = exec.Command("chown", "-R", "extuser:"+LimanUser, ExtensionsPath+extensionName).Output()
+	}
 	if err == nil {
 		log.Println("Extension Permissions Fixed")
 		return true
